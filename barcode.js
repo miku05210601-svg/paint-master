@@ -1,38 +1,31 @@
 /**
- * barcode.js — 写真からバーコードをデコード
- * BarcodeDetector API（iOS 17+ / Chrome Android）を使用
- * フォールバック: ZXing Canvas方式
+ * barcode.js — サーバー側バーコードデコード（全iOS対応）
+ * 画像をbase64でVercel APIに送り、サーバー側でzbar-wasmがデコード
  */
 
 class BarcodeScanner {
   async decodeFromImage(imgElement) {
-    // ネイティブBarcodeDetector（iOS 17+ Safari / Chrome Android）
-    if ('BarcodeDetector' in window) {
-      const detector = new BarcodeDetector({
-        formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'qr_code'],
-      });
-      const results = await detector.detect(imgElement);
-      if (results.length > 0) return results[0].rawValue;
-      throw new Error('no_barcode');
-    }
+    // Canvas で最大1280pxにリサイズしてbase64取得
+    const canvas = document.createElement('canvas');
+    const MAX = 1280;
+    const w = imgElement.naturalWidth  || imgElement.width  || 1280;
+    const h = imgElement.naturalHeight || imgElement.height || 960;
+    const scale = Math.min(1, MAX / Math.max(w, h));
+    canvas.width  = Math.round(w * scale);
+    canvas.height = Math.round(h * scale);
+    canvas.getContext('2d').drawImage(imgElement, 0, 0, canvas.width, canvas.height);
 
-    // フォールバック: ZXing（Canvas経由）
-    if (typeof ZXing !== 'undefined') {
-      const reader = new ZXing.BrowserMultiFormatReader();
-      const canvas = document.createElement('canvas');
-      const MAX = 1280;
-      const scale = Math.min(1, MAX / Math.max(imgElement.naturalWidth || 1280, imgElement.naturalHeight || 1280));
-      canvas.width  = Math.round((imgElement.naturalWidth  || 1280) * scale);
-      canvas.height = Math.round((imgElement.naturalHeight || 960)  * scale);
-      canvas.getContext('2d').drawImage(imgElement, 0, 0, canvas.width, canvas.height);
+    const imageBase64 = canvas.toDataURL('image/jpeg', 0.85);
 
-      const decode  = reader.decodeFromCanvas(canvas);
-      const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 10000));
-      const result  = await Promise.race([decode, timeout]);
-      return result.getText();
-    }
+    const res = await fetch('/api/decode-barcode', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageBase64 }),
+    });
 
-    throw new Error('no_library');
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || 'decode failed');
+    return data.barcode;
   }
 
   stop() {}
