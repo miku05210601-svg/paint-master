@@ -8,8 +8,8 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>PaintMaster — 塗料管理</title>
   <link rel="stylesheet" href="style.css">
-  <!-- html5-qrcode バーコードスキャンライブラリ (iOS Safari対応) -->
-  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <!-- ZXing バーコードスキャンライブラリ（画像デコード用） -->
+  <script src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js"></script>
   <!-- プリセットデータ -->
   <script src="presets/mr-color.js"></script>
   <script src="presets/tamiya.js"></script>
@@ -466,15 +466,19 @@
   </div>
 
   <div class="scan-container">
-    <p class="scan-hint">塗料ボトルの側面・底のバーコードをカメラに向けてください</p>
-    <p id="scan-https-warning" class="scan-hint" style="color:var(--danger);font-size:12px;display:none;">※ HTTPSが必要です。このサイトではカメラが使用できません。</p>
+    <p class="scan-hint">バーコードが写るように撮影してください</p>
 
-    <div class="scan-frame">
-      <div id="barcode-video-container"></div>
-      <div class="scan-overlay">
-        <div class="scan-line"></div>
-      </div>
-    </div>
+    <!-- 撮影ボタン -->
+    <label class="btn-scan-photo" for="scan-photo-input">
+      📷 カメラでバーコードを撮影
+    </label>
+    <input type="file" id="scan-photo-input" accept="image/*" capture="environment" style="display:none;">
+
+    <!-- プレビュー画像（非表示、デコード用） -->
+    <img id="scan-preview-img" style="display:none; max-width:100%; border-radius:10px; margin-top:12px;">
+
+    <!-- 処理中表示 -->
+    <p id="scan-loading" style="display:none; color:var(--muted); font-size:14px; margin-top:12px;">読み取り中…</p>
 
     <!-- スキャン結果 -->
     <div class="scan-result" id="scan-result">
@@ -482,7 +486,7 @@
       <div id="scan-result-name" style="font-size:14px;margin:4px 0 8px;"></div>
       <div class="scan-barcode-value" id="scan-barcode-value"></div>
       <div id="scan-rakuten-info"></div>
-      <button class="btn-primary" id="scan-result-action" style="margin-top:12px;"></button>
+      <button class="btn-primary" id="scan-result-action" style="margin-top:12px;display:none;"></button>
     </div>
   </div>
 </div>

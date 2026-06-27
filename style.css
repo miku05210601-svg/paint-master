@@ -632,6 +632,23 @@ html, body {
 /* ========================================
    バーコードスキャン画面
    ======================================== */
+.btn-scan-photo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--accent-light);
+  color: #fff;
+  font-size: 17px;
+  font-weight: 600;
+  padding: 16px 32px;
+  border-radius: 14px;
+  cursor: pointer;
+  width: 100%;
+  max-width: 320px;
+  box-shadow: 0 4px 20px rgba(74,127,193,0.4);
+}
+.btn-scan-photo:active { opacity: 0.8; }
 .scan-container {
   flex: 1;
   display: flex;

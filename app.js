@@ -295,103 +295,103 @@ function parsePaintInfo(itemName) {
   return result;
 }
 
+async function handleBarcodeResult(value) {
+  const resultEl = document.getElementById('scan-result');
+  const statusEl = document.getElementById('scan-result-status');
+  const nameEl = document.getElementById('scan-result-name');
+  const barcodeValEl = document.getElementById('scan-barcode-value');
+  const actionEl = document.getElementById('scan-result-action');
+  const rakutenEl = document.getElementById('scan-rakuten-info');
+
+  lastScannedBarcode = value;
+  resultEl.classList.add('visible');
+  barcodeValEl.textContent = `バーコード: ${value}`;
+  rakutenEl.innerHTML = '';
+
+  const paint = paintStore.findByBarcode(value);
+
+  if (paint) {
+    statusEl.textContent = '✓ 既に所持しています';
+    statusEl.className = 'scan-result-status found';
+    nameEl.textContent = `${paint.maker} ${paint.colorCode} ${paint.colorName}（在庫: ${paint.stock}）`;
+    actionEl.textContent = '詳細を見る';
+    actionEl.style.display = '';
+    actionEl.onclick = () => openDetail(paint.id);
+  } else {
+    statusEl.textContent = '✗ 未登録です — 商品情報を検索中…';
+    statusEl.className = 'scan-result-status not-found';
+    nameEl.textContent = '';
+    actionEl.style.display = 'none';
+
+    const rakutenData = await fetchRakutenInfo(value);
+
+    if (rakutenData && !rakutenData.error) {
+      const parsed = parsePaintInfo(rakutenData.itemName);
+      nameEl.textContent = rakutenData.itemName;
+      rakutenEl.innerHTML = `
+        <div class="rakuten-result">
+          ${rakutenData.imageUrl ? `<img src="${escapeHtml(rakutenData.imageUrl)}" alt="商品画像" class="rakuten-thumb">` : ''}
+          <div class="rakuten-parsed">
+            ${parsed.maker ? `<span class="rakuten-tag">メーカー: ${escapeHtml(parsed.maker)}</span>` : ''}
+            ${parsed.colorCode ? `<span class="rakuten-tag">色番号: ${escapeHtml(parsed.colorCode)}</span>` : ''}
+          </div>
+        </div>`;
+      actionEl.textContent = 'この情報で登録する';
+      actionEl.style.display = '';
+      actionEl.onclick = () => openAddForm({ barcode: value, maker: parsed.maker, colorCode: parsed.colorCode, colorName: parsed.colorName });
+    } else {
+      nameEl.textContent = '楽天での商品情報が見つかりませんでした';
+      actionEl.textContent = '手動で登録する';
+      actionEl.style.display = '';
+      actionEl.onclick = () => openAddForm({ barcode: value });
+    }
+
+    statusEl.textContent = '✗ 未登録です';
+  }
+}
+
 function startScan() {
   const resultEl = document.getElementById('scan-result');
+  const loadingEl = document.getElementById('scan-loading');
+  const previewImg = document.getElementById('scan-preview-img');
+  const fileInput = document.getElementById('scan-photo-input');
+
   resultEl.classList.remove('visible');
   lastScannedBarcode = null;
 
-  // HTTPSでない場合のみ警告を表示
-  const httpsWarning = document.getElementById('scan-https-warning');
-  if (httpsWarning) {
-    httpsWarning.style.display = (location.protocol !== 'https:' && location.hostname !== 'localhost') ? '' : 'none';
-  }
+  // 前回のリスナーを削除してから再登録
+  const newInput = fileInput.cloneNode(true);
+  fileInput.parentNode.replaceChild(newInput, fileInput);
 
-  let resultShown = false;
+  newInput.addEventListener('change', async () => {
+    const file = newInput.files[0];
+    if (!file) return;
 
-  barcodeScanner.start(
-    async (value) => {
-      if (resultShown) return;
-      resultShown = true;
-      lastScannedBarcode = value;
+    // プレビュー表示
+    const objectUrl = URL.createObjectURL(file);
+    previewImg.src = objectUrl;
+    previewImg.style.display = 'block';
+    loadingEl.style.display = 'block';
+    resultEl.classList.remove('visible');
 
-      const statusEl = document.getElementById('scan-result-status');
-      const nameEl = document.getElementById('scan-result-name');
-      const barcodeValEl = document.getElementById('scan-barcode-value');
-      const actionEl = document.getElementById('scan-result-action');
-      const rakutenEl = document.getElementById('scan-rakuten-info');
-
+    try {
+      const value = await barcodeScanner.decodeFromImage(previewImg);
+      loadingEl.style.display = 'none';
+      await handleBarcodeResult(value);
+    } catch {
+      loadingEl.style.display = 'none';
       resultEl.classList.add('visible');
-      barcodeValEl.textContent = `バーコード: ${value}`;
-      rakutenEl.innerHTML = '';
-
-      const paint = paintStore.findByBarcode(value);
-
-      if (paint) {
-        // 所持済み
-        statusEl.textContent = '✓ 既に所持しています';
-        statusEl.className = 'scan-result-status found';
-        nameEl.textContent = `${paint.maker} ${paint.colorCode} ${paint.colorName}（在庫: ${paint.stock}）`;
-        actionEl.textContent = '詳細を見る';
-        actionEl.style.display = '';
-        actionEl.onclick = () => { barcodeScanner.stop(); openDetail(paint.id); };
-      } else {
-        // 未登録 — 楽天APIで商品情報を検索
-        statusEl.textContent = '✗ 未登録です — 商品情報を検索中…';
-        statusEl.className = 'scan-result-status not-found';
-        nameEl.textContent = '';
-        actionEl.style.display = 'none';
-
-        const rakutenData = await fetchRakutenInfo(value);
-
-        if (rakutenData && !rakutenData.error) {
-          const parsed = parsePaintInfo(rakutenData.itemName);
-          nameEl.textContent = rakutenData.itemName;
-
-          rakutenEl.innerHTML = `
-            <div class="rakuten-result">
-              ${rakutenData.imageUrl ? `<img src="${rakutenData.imageUrl}" alt="商品画像" class="rakuten-thumb">` : ''}
-              <div class="rakuten-parsed">
-                ${parsed.maker ? `<span class="rakuten-tag">メーカー: ${escapeHtml(parsed.maker)}</span>` : ''}
-                ${parsed.colorCode ? `<span class="rakuten-tag">色番号: ${escapeHtml(parsed.colorCode)}</span>` : ''}
-              </div>
-            </div>
-          `;
-
-          actionEl.textContent = 'この情報で登録する';
-          actionEl.style.display = '';
-          actionEl.onclick = () => {
-            barcodeScanner.stop();
-            openAddForm({
-              barcode: value,
-              maker: parsed.maker,
-              colorCode: parsed.colorCode,
-              colorName: parsed.colorName,
-            });
-          };
-        } else {
-          nameEl.textContent = '楽天での商品情報が見つかりませんでした';
-          actionEl.textContent = '手動で登録する';
-          actionEl.style.display = '';
-          actionEl.onclick = () => { barcodeScanner.stop(); openAddForm({ barcode: value }); };
-        }
-
-        statusEl.textContent = '✗ 未登録です';
-      }
-
-      // 3秒後に再スキャン可能に
-      setTimeout(() => { resultShown = false; }, 3000);
-    },
-    (errMsg) => {
-      resultEl.classList.add('visible');
-      document.getElementById('scan-result-status').textContent = errMsg;
+      document.getElementById('scan-result-status').textContent = '読み取れませんでした。バーコード部分が明るくはっきり写るように撮り直してください。';
       document.getElementById('scan-result-status').className = 'scan-result-status not-found';
       document.getElementById('scan-result-name').textContent = '';
       document.getElementById('scan-barcode-value').textContent = '';
-      document.getElementById('scan-result-action').textContent = '';
-      document.getElementById('scan-result-action').onclick = null;
+      document.getElementById('scan-result-action').style.display = 'none';
       document.getElementById('scan-rakuten-info').innerHTML = '';
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+      newInput.value = '';
     }
-  );
+  });
 }
 
 // ========================================
