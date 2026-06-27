@@ -211,7 +211,19 @@ function openAddForm(prefill = {}) {
     document.getElementById('add-barcode').value = prefill.barcode;
     pendingAddBarcode = prefill.barcode;
   }
+  if (prefill.maker) {
+    const makerEl = document.getElementById('add-maker');
+    if (makerEl) makerEl.value = prefill.maker;
+  }
   if (prefill.colorCode) document.getElementById('add-colorCode').value = prefill.colorCode;
+  if (prefill.colorName) {
+    const nameEl = document.getElementById('add-colorName');
+    if (nameEl) nameEl.value = prefill.colorName;
+  }
+  if (prefill.type) {
+    const typeEl = document.getElementById('add-type');
+    if (typeEl) typeEl.value = prefill.type;
+  }
 
   navigateTo('screen-add');
 }
@@ -379,7 +391,7 @@ function startScan() {
 
     // 写真を撮った時点で即「手動登録」ボタンを表示
     resultEl.classList.add('visible');
-    document.getElementById('scan-result-status').textContent = 'バーコードを読み取り中…';
+    document.getElementById('scan-result-status').textContent = 'ラベルを解析中…';
     document.getElementById('scan-result-status').className = 'scan-result-status';
     document.getElementById('scan-result-name').textContent = '';
     document.getElementById('scan-barcode-value').textContent = '';
@@ -389,15 +401,52 @@ function startScan() {
     actionEl.style.display = '';
     actionEl.onclick = () => openAddForm({});
 
-    // バーコード読み取りを試みる（失敗しても手動登録ボタンが残る）
+    // Claude Vision API で塗料ラベルを解析
     try {
-      const value = await Promise.race([
-        barcodeScanner.decodeFromImage(previewImg),
-        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000)),
+      // Canvas でリサイズして base64 化（API送信サイズを抑える）
+      const canvas = document.createElement('canvas');
+      const MAX = 1024;
+      const w = previewImg.naturalWidth || previewImg.width || 1024;
+      const h = previewImg.naturalHeight || previewImg.height || 768;
+      const scale = Math.min(1, MAX / Math.max(w, h));
+      canvas.width = Math.round(w * scale);
+      canvas.height = Math.round(h * scale);
+      canvas.getContext('2d').drawImage(previewImg, 0, 0, canvas.width, canvas.height);
+      const imageBase64 = canvas.toDataURL('image/jpeg', 0.85);
+
+      const res = await Promise.race([
+        fetch('/api/analyze-paint', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageBase64 }),
+        }),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 30000)),
       ]);
-      await handleBarcodeResult(value);
+
+      const data = await res.json();
+
+      if (!res.ok || data.error) throw new Error(data.error || '解析に失敗しました');
+
+      // 解析結果を表示して登録フォームへ引き継ぐ
+      const { maker = '', colorCode = '', colorName = '', type = '' } = data;
+      const displayName = [maker, colorCode, colorName].filter(Boolean).join(' ');
+
+      document.getElementById('scan-result-status').textContent = '✓ ラベルを読み取りました';
+      document.getElementById('scan-result-status').className = 'scan-result-status found';
+      document.getElementById('scan-result-name').textContent = displayName || '（情報を取得しました）';
+      document.getElementById('scan-rakuten-info').innerHTML = `
+        <div style="font-size:0.85em;color:var(--muted);margin-top:6px;line-height:1.7;">
+          ${maker ? `<div>メーカー: <strong style="color:var(--text)">${escapeHtml(maker)}</strong></div>` : ''}
+          ${colorCode ? `<div>色番号: <strong style="color:var(--text)">${escapeHtml(colorCode)}</strong></div>` : ''}
+          ${colorName ? `<div>色名: <strong style="color:var(--text)">${escapeHtml(colorName)}</strong></div>` : ''}
+          ${type ? `<div>種別: <strong style="color:var(--text)">${escapeHtml(TYPE_LABELS[type] || type)}</strong></div>` : ''}
+        </div>`;
+
+      actionEl.textContent = 'この情報で登録する';
+      actionEl.onclick = () => openAddForm({ maker, colorCode, colorName, type });
+
     } catch (err) {
-      document.getElementById('scan-result-status').textContent = 'バーコードを読み取れませんでした。手動で登録してください。';
+      document.getElementById('scan-result-status').textContent = '解析できませんでした。手動で登録してください。';
       document.getElementById('scan-result-status').className = 'scan-result-status not-found';
     } finally {
       URL.revokeObjectURL(objectUrl);
