@@ -1,64 +1,70 @@
 /**
  * barcode.js — バーコードスキャン処理
- * ZXing-js ライブラリを利用してカメラからバーコードを読み取る
- * ※ カメラAPIはHTTPS または localhost環境でのみ動作します
+ * html5-qrcode ライブラリを利用（iOS Safari 対応）
  */
 
 class BarcodeScanner {
   constructor() {
-    this.reader = null;
+    this.scanner = null;
     this.isScanning = false;
-    this.onResult = null;
-    this.onError = null;
   }
 
   async start(videoElement, onResult, onError) {
-    this.onResult = onResult;
-    this.onError = onError;
-
-    // ZXingがロードされているか確認
-    if (typeof ZXing === 'undefined') {
+    if (typeof Html5Qrcode === 'undefined') {
       onError?.('バーコードスキャンライブラリの読み込みに失敗しました。');
       return;
     }
 
-    try {
-      const hints = new Map();
-      const formats = [
-        ZXing.BarcodeFormat.EAN_13,
-        ZXing.BarcodeFormat.EAN_8,
-        ZXing.BarcodeFormat.CODE_128,
-        ZXing.BarcodeFormat.CODE_39,
-        ZXing.BarcodeFormat.QR_CODE,
-        ZXing.BarcodeFormat.UPC_A,
-        ZXing.BarcodeFormat.UPC_E,
-      ];
-      hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
+    // html5-qrcode は要素IDで動作するため、video要素の親divのIDを使う
+    const containerId = 'barcode-video-container';
+    let container = document.getElementById(containerId);
+    if (!container) {
+      container = document.createElement('div');
+      container.id = containerId;
+      videoElement.parentNode.replaceChild(container, videoElement);
+    }
 
-      this.reader = new ZXing.BrowserMultiFormatReader(hints);
+    try {
+      this.scanner = new Html5Qrcode(containerId);
       this.isScanning = true;
 
-      await this.reader.decodeFromVideoDevice(null, videoElement, (result, err) => {
-        if (result) {
-          onResult?.(result.getText());
+      await this.scanner.start(
+        { facingMode: 'environment' },
+        {
+          fps: 10,
+          qrbox: { width: 250, height: 150 },
+          aspectRatio: 1.5,
+          formatsToSupport: [
+            Html5QrcodeSupportedFormats.EAN_13,
+            Html5QrcodeSupportedFormats.EAN_8,
+            Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.CODE_39,
+            Html5QrcodeSupportedFormats.UPC_A,
+            Html5QrcodeSupportedFormats.UPC_E,
+          ],
+        },
+        (decodedText) => {
+          onResult?.(decodedText);
+        },
+        () => {
+          // フレームごとの未検出エラーは無視
         }
-        // err はフレームごとに発生する通常エラーなので無視
-      });
+      );
     } catch (e) {
-      if (e.name === 'NotAllowedError') {
+      if (e.toString().includes('Permission') || e.toString().includes('NotAllowed')) {
         onError?.('カメラへのアクセスが拒否されました。ブラウザの設定からカメラ許可を有効にしてください。');
-      } else if (e.name === 'NotFoundError') {
+      } else if (e.toString().includes('NotFound')) {
         onError?.('カメラが見つかりません。');
       } else {
-        onError?.(`カメラの起動に失敗しました: ${e.message}`);
+        onError?.(`カメラの起動に失敗しました: ${e}`);
       }
     }
   }
 
   stop() {
-    if (this.reader) {
-      this.reader.reset();
-      this.reader = null;
+    if (this.scanner && this.isScanning) {
+      this.scanner.stop().catch(() => {});
+      this.scanner = null;
     }
     this.isScanning = false;
   }
