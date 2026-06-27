@@ -9,31 +9,21 @@ class BarcodeScanner {
     this.isScanning = false;
   }
 
-  async start(videoElement, onResult, onError) {
+  async start(onResult, onError) {
     if (typeof Html5Qrcode === 'undefined') {
       onError?.('バーコードスキャンライブラリの読み込みに失敗しました。');
       return;
     }
 
-    // html5-qrcode は要素IDで動作するため、video要素の親divのIDを使う
-    const containerId = 'barcode-video-container';
-    let container = document.getElementById(containerId);
-    if (!container) {
-      container = document.createElement('div');
-      container.id = containerId;
-      videoElement.parentNode.replaceChild(container, videoElement);
-    }
-
     try {
-      this.scanner = new Html5Qrcode(containerId);
+      this.scanner = new Html5Qrcode('barcode-video-container');
       this.isScanning = true;
 
       await this.scanner.start(
         { facingMode: 'environment' },
         {
           fps: 10,
-          qrbox: { width: 250, height: 150 },
-          aspectRatio: 1.5,
+          qrbox: { width: 240, height: 120 },
           formatsToSupport: [
             Html5QrcodeSupportedFormats.EAN_13,
             Html5QrcodeSupportedFormats.EAN_8,
@@ -46,17 +36,16 @@ class BarcodeScanner {
         (decodedText) => {
           onResult?.(decodedText);
         },
-        () => {
-          // フレームごとの未検出エラーは無視
-        }
+        () => { /* フレームごとの未検出は無視 */ }
       );
     } catch (e) {
-      if (e.toString().includes('Permission') || e.toString().includes('NotAllowed')) {
+      const msg = String(e);
+      if (msg.includes('Permission') || msg.includes('NotAllowed')) {
         onError?.('カメラへのアクセスが拒否されました。ブラウザの設定からカメラ許可を有効にしてください。');
-      } else if (e.toString().includes('NotFound')) {
+      } else if (msg.includes('NotFound')) {
         onError?.('カメラが見つかりません。');
       } else {
-        onError?.(`カメラの起動に失敗しました: ${e}`);
+        onError?.(`カメラの起動に失敗しました: ${msg}`);
       }
     }
   }

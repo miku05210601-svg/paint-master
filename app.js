@@ -296,7 +296,6 @@ function parsePaintInfo(itemName) {
 }
 
 function startScan() {
-  const videoEl = document.getElementById('barcode-video');
   const resultEl = document.getElementById('scan-result');
   resultEl.classList.remove('visible');
   lastScannedBarcode = null;
@@ -310,7 +309,6 @@ function startScan() {
   let resultShown = false;
 
   barcodeScanner.start(
-    videoEl,
     async (value) => {
       if (resultShown) return;
       resultShown = true;

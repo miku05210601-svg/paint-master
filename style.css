@@ -655,6 +655,24 @@ html, body {
   width: 100%;
   max-width: 320px;
 }
+/* html5-qrcode が生成する要素をリセット */
+#barcode-video-container {
+  width: 100%;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #000;
+  min-height: 240px;
+}
+#barcode-video-container video {
+  width: 100% !important;
+  height: auto !important;
+  display: block;
+}
+#barcode-video-container img { display: none; }
+#html5-qrcode-button-camera-permission,
+#html5-qrcode-button-camera-stop,
+#html5-qrcode-anchor-scan-type-change { display: none !important; }
+#html5qr-code-full-region__header_message { display: none !important; }
 .scan-overlay {
   position: absolute;
   inset: 0;
