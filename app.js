@@ -367,12 +367,17 @@ function startScan() {
     const file = newInput.files[0];
     if (!file) return;
 
-    // プレビュー表示
+    // プレビュー表示（画像の読み込み完了を待ってからデコード）
     const objectUrl = URL.createObjectURL(file);
-    previewImg.src = objectUrl;
-    previewImg.style.display = 'block';
     loadingEl.style.display = 'block';
     resultEl.classList.remove('visible');
+
+    await new Promise((resolve, reject) => {
+      previewImg.onload = resolve;
+      previewImg.onerror = reject;
+      previewImg.src = objectUrl;
+      previewImg.style.display = 'block';
+    });
 
     try {
       const value = await barcodeScanner.decodeFromImage(previewImg);
