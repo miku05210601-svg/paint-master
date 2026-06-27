@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0d0f14">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>PaintMaster — 塗料管理</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- ZXing バーコードスキャンライブラリ (CDN) -->
+  <script src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js"></script>
+  <!-- プリセットデータ -->
+  <script src="presets/mr-color.js"></script>
+  <script src="presets/tamiya.js"></script>
+  <script src="presets/aqueous.js"></script>
+</head>
+<body>
+
+<!-- ========================================
+     画面1: 塗料一覧
+     ======================================== -->
+<div class="screen active" id="screen-list">
+  <div class="app-header">
+    <span class="header-icon">🎨</span>
+    <h1>PaintMaster</h1>
+  </div>
+
+  <div class="screen-content">
+    <!-- 検索バー -->
+    <div class="search-bar">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+      </svg>
+      <input type="search" id="search-input" placeholder="メーカー・色番号・色名で検索" autocomplete="off" spellcheck="false">
+    </div>
+
+    <!-- タイプフィルター -->
+    <div class="filter-row">
+      <button class="filter-chip active" data-type="all">すべて</button>
+      <button class="filter-chip" data-type="lacquer">ラッカー</button>
+      <button class="filter-chip" data-type="acrylic">水性</button>
+      <button class="filter-chip" data-type="enamel">エナメル</button>
+      <button class="filter-chip" data-type="other">その他</button>
+    </div>
+
+    <!-- 塗料カードリスト -->
+    <div class="paint-list" id="paint-list"></div>
+
+    <!-- 空状態 -->
+    <div class="empty-state" id="list-empty" style="display:none;">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M12 20.94c1.5 0 2.75 1.06 4 1.06 3 0 6-8 6-12.22A4.91 4.91 0 0 0 17 5c-2.22 0-4 1.44-5 2-1-.56-2.78-2-5-2a4.9 4.9 0 0 0-5 4.78C2 13 5 21 8 21c1.25 0 2.5-1.06 4-1.06z"/>
+      </svg>
+      <p>塗料が登録されていません<br>「＋」ボタンから追加してください</p>
+    </div>
+  </div>
+
+  <!-- ボトムタブ -->
+  <nav class="bottom-tab">
+    <button class="tab-item active" data-screen="screen-list">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+        <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+      </svg>
+      一覧
+    </button>
+    <button class="tab-item" data-screen="screen-shopping">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/>
+        <path d="M16 10a4 4 0 0 1-8 0"/>
+      </svg>
+      買い物
+    </button>
+    <button class="tab-item tab-add" id="btn-open-add" data-screen="screen-add">
+      <span style="font-size:26px;line-height:1;">＋</span>
+      <span>追加</span>
+    </button>
+    <button class="tab-item" data-screen="screen-preset">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
+        <rect x="9" y="3" width="6" height="4" rx="1"/>
+        <path d="m9 12 2 2 4-4"/>
+      </svg>
+      プリセット
+    </button>
+    <button class="tab-item" data-screen="screen-scan">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/>
+        <rect x="7" y="7" width="10" height="10"/>
+      </svg>
+      スキャン
+    </button>
+  </nav>
+</div>
+
+<!-- ========================================
+     画面2: 塗料詳細
+     ======================================== -->
+<div class="screen" id="screen-detail">
+  <div class="app-header">
+    <button class="btn-icon" id="btn-back-from-detail" aria-label="戻る">‹</button>
+    <h1>塗料詳細</h1>
+  </div>
+
+  <div class="screen-content no-tab">
+    <!-- 写真 -->
+    <div class="detail-photo" id="detail-photo">🎨</div>
+
+    <div class="detail-info">
+      <div>
+        <div class="detail-code-row">
+          <span class="detail-code" id="detail-color-code"></span>
+        </div>
+        <div class="detail-name" id="detail-color-name"></div>
+        <div class="detail-maker" id="detail-maker"></div>
+      </div>
+
+      <div class="detail-meta">
+        <div class="detail-meta-item">
+          <div class="detail-meta-label">種類</div>
+          <div class="detail-meta-value" id="detail-type"></div>
+        </div>
+        <div class="detail-meta-item">
+          <div class="detail-meta-label">バーコード</div>
+          <div class="detail-meta-value" style="font-size:12px;font-family:monospace;" id="detail-barcode"></div>
+        </div>
+      </div>
+
+      <!-- 在庫 +/− -->
+      <div class="detail-stock-section">
+        <span class="detail-stock-label">在庫数</span>
+        <div class="detail-stock-controls">
+          <button class="btn-stock-large" id="btn-detail-dec" aria-label="在庫を減らす">−</button>
+          <span class="detail-stock-count" id="detail-stock-count">0</span>
+          <button class="btn-stock-large" id="btn-detail-inc" aria-label="在庫を増やす">＋</button>
+        </div>
+      </div>
+
+      <!-- メモ -->
+      <div class="detail-meta-item" style="grid-column:1/-1;">
+        <div class="detail-meta-label">メモ</div>
+        <div class="detail-meta-value" style="font-size:14px;font-weight:400;color:var(--text);" id="detail-memo"></div>
+      </div>
+    </div>
+
+    <div class="detail-actions">
+      <button class="btn-secondary" id="btn-add-shopping">🛒 買い物リストに追加</button>
+      <button class="btn-secondary" id="btn-detail-edit">✏️ 編集</button>
+      <button class="btn-danger" id="btn-detail-delete">🗑️ 削除</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========================================
+     画面3: 新規登録
+     ======================================== -->
+<div class="screen" id="screen-add">
+  <div class="app-header">
+    <button class="btn-icon" id="btn-back-from-add" aria-label="戻る">‹</button>
+    <h1>新規登録</h1>
+  </div>
+
+  <div class="screen-content no-tab">
+    <form id="add-form" class="form-section">
+
+      <!-- 写真 -->
+      <div class="form-group">
+        <label class="form-label">写真</label>
+        <div class="photo-upload-area" id="add-photo-area">
+          <img id="add-photo-preview" alt="プレビュー" style="display:none;">
+          <div id="add-photo-placeholder" style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+              <path d="m21 15-5-5L5 21"/>
+            </svg>
+            <span class="upload-label">タップして写真を選択<br><small style="color:var(--muted);">カメラ撮影またはライブラリから</small></span>
+          </div>
+        </div>
+        <input type="file" id="add-photo-input" accept="image/*" capture="environment" style="display:none;">
+      </div>
+
+      <!-- メーカー・シリーズ -->
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="add-maker">メーカー名 *</label>
+          <input type="text" id="add-maker" class="form-input" list="maker-list" placeholder="Mr.カラー" required>
+          <datalist id="maker-list">
+            <option value="Mr.カラー">
+            <option value="タミヤカラー">
+            <option value="ガイアカラー">
+            <option value="水性ホビーカラー">
+            <option value="ファレホ">
+          </datalist>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="add-series">シリーズ</label>
+          <input type="text" id="add-series" class="form-input" placeholder="例: Mr.カラー">
+        </div>
+      </div>
+
+      <!-- 色番号・色名 -->
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="add-colorCode">色番号 *</label>
+          <input type="text" id="add-colorCode" class="form-input" placeholder="C-1" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="add-colorName">色名 *</label>
+          <input type="text" id="add-colorName" class="form-input" placeholder="ホワイト" required>
+        </div>
+      </div>
+
+      <!-- 種類 -->
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="add-type">種類</label>
+          <select id="add-type" class="form-select">
+            <option value="lacquer">ラッカー</option>
+            <option value="acrylic">水性</option>
+            <option value="enamel">エナメル</option>
+            <option value="other">その他</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="add-stock">在庫数</label>
+          <input type="number" id="add-stock" class="form-input" value="1" min="0" max="999">
+        </div>
+      </div>
+
+      <!-- バーコード -->
+      <div class="form-group">
+        <label class="form-label" for="add-barcode">バーコード</label>
+        <input type="text" id="add-barcode" class="form-input" placeholder="スキャンまたは手動入力" inputmode="numeric">
+      </div>
+
+      <!-- メモ -->
+      <div class="form-group">
+        <label class="form-label" for="add-memo">メモ</label>
+        <textarea id="add-memo" class="form-textarea" placeholder="色の特徴、用途など"></textarea>
+      </div>
+
+      <button type="submit" class="btn-primary">登録する</button>
+    </form>
+  </div>
+</div>
+
+<!-- ========================================
+     画面4: 編集
+     ======================================== -->
+<div class="screen" id="screen-edit">
+  <div class="app-header">
+    <button class="btn-icon" id="btn-back-from-edit" aria-label="戻る">‹</button>
+    <h1>編集</h1>
+  </div>
+
+  <div class="screen-content no-tab">
+    <form id="edit-form" class="form-section">
+
+      <div class="form-group">
+        <label class="form-label">写真</label>
+        <div class="photo-upload-area" id="edit-photo-area">
+          <img id="edit-photo-preview" alt="プレビュー" style="display:none;">
+          <div id="edit-photo-placeholder">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+              <path d="m21 15-5-5L5 21"/>
+            </svg>
+            <span class="upload-label">タップして変更</span>
+          </div>
+        </div>
+        <input type="file" id="edit-photo-input" accept="image/*" capture="environment" style="display:none;">
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="edit-maker">メーカー名 *</label>
+          <input type="text" id="edit-maker" class="form-input" list="maker-list" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="edit-series">シリーズ</label>
+          <input type="text" id="edit-series" class="form-input">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="edit-colorCode">色番号 *</label>
+          <input type="text" id="edit-colorCode" class="form-input" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="edit-colorName">色名 *</label>
+          <input type="text" id="edit-colorName" class="form-input" required>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="edit-type">種類</label>
+          <select id="edit-type" class="form-select">
+            <option value="lacquer">ラッカー</option>
+            <option value="acrylic">水性</option>
+            <option value="enamel">エナメル</option>
+            <option value="other">その他</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="edit-stock">在庫数</label>
+          <input type="number" id="edit-stock" class="form-input" min="0" max="999">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="edit-barcode">バーコード</label>
+        <input type="text" id="edit-barcode" class="form-input" inputmode="numeric">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="edit-memo">メモ</label>
+        <textarea id="edit-memo" class="form-textarea"></textarea>
+      </div>
+
+      <button type="submit" class="btn-primary">更新する</button>
+    </form>
+  </div>
+</div>
+
+<!-- ========================================
+     画面5: 買い物リスト
+     ======================================== -->
+<div class="screen" id="screen-shopping">
+  <div class="app-header">
+    <h1>買い物リスト</h1>
+  </div>
+
+  <div class="screen-content">
+    <div class="shopping-list" id="shopping-list"></div>
+    <div class="empty-state" id="shopping-empty" style="display:none;">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/>
+        <path d="M16 10a4 4 0 0 1-8 0"/>
+      </svg>
+      <p>買い物リストは空です<br>塗料詳細から追加できます</p>
+    </div>
+  </div>
+
+  <nav class="bottom-tab">
+    <button class="tab-item" data-screen="screen-list">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+        <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+      </svg>
+      一覧
+    </button>
+    <button class="tab-item active" data-screen="screen-shopping">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/>
+        <path d="M16 10a4 4 0 0 1-8 0"/>
+      </svg>
+      買い物
+    </button>
+    <button class="tab-item tab-add" id="btn-open-add-from-shopping" data-screen="screen-add">
+      <span style="font-size:26px;line-height:1;">＋</span>
+      <span>追加</span>
+    </button>
+    <button class="tab-item" data-screen="screen-preset">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
+        <rect x="9" y="3" width="6" height="4" rx="1"/>
+        <path d="m9 12 2 2 4-4"/>
+      </svg>
+      プリセット
+    </button>
+    <button class="tab-item" data-screen="screen-scan">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/>
+        <rect x="7" y="7" width="10" height="10"/>
+      </svg>
+      スキャン
+    </button>
+  </nav>
+</div>
+
+<!-- ========================================
+     画面6: プリセット登録
+     ======================================== -->
+<div class="screen" id="screen-preset">
+  <div class="app-header">
+    <h1>プリセットから追加</h1>
+  </div>
+
+  <div class="screen-content">
+    <!-- メーカー選択タブ -->
+    <div class="preset-maker-tabs" id="preset-maker-tabs"></div>
+
+    <!-- 検索 -->
+    <div class="search-bar" style="margin-top:8px;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+      </svg>
+      <input type="search" id="preset-search" placeholder="色番号・色名で絞り込み" autocomplete="off">
+    </div>
+
+    <!-- 一括操作バー -->
+    <div class="preset-bulk-bar" id="preset-bulk-bar">
+      <span id="preset-checked-count">0件選択中</span>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-small-secondary" id="preset-select-all">すべて選択</button>
+        <button class="btn-small-secondary" id="preset-deselect-all">解除</button>
+      </div>
+    </div>
+
+    <!-- 色リスト -->
+    <div class="preset-color-list" id="preset-color-list"></div>
+  </div>
+
+  <!-- 登録ボタン（固定フッター） -->
+  <div class="preset-register-footer" id="preset-register-footer" style="display:none;">
+    <button class="btn-primary" id="btn-preset-register">選択した塗料を登録する</button>
+  </div>
+
+  <nav class="bottom-tab">
+    <button class="tab-item" data-screen="screen-list">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+        <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+      </svg>
+      一覧
+    </button>
+    <button class="tab-item" data-screen="screen-shopping">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/>
+        <path d="M16 10a4 4 0 0 1-8 0"/>
+      </svg>
+      買い物
+    </button>
+    <button class="tab-item tab-add" data-screen="screen-add">
+      <span style="font-size:26px;line-height:1;">＋</span>
+      <span>追加</span>
+    </button>
+    <button class="tab-item active" data-screen="screen-preset">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
+        <rect x="9" y="3" width="6" height="4" rx="1"/>
+        <path d="m9 12 2 2 4-4"/>
+      </svg>
+      プリセット
+    </button>
+    <button class="tab-item" data-screen="screen-scan">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/>
+        <rect x="7" y="7" width="10" height="10"/>
+      </svg>
+      スキャン
+    </button>
+  </nav>
+</div>
+
+<!-- ========================================
+     画面7: バーコードスキャン
+     ======================================== -->
+<div class="screen" id="screen-scan">
+  <div class="app-header">
+    <button class="btn-icon" id="btn-back-from-scan" aria-label="戻る">‹</button>
+    <h1>バーコードスキャン</h1>
+  </div>
+
+  <div class="scan-container">
+    <p class="scan-hint">カメラをバーコードに向けてください<br>
+      <small style="color:var(--danger);font-size:11px;">※ HTTPS または localhost 環境が必要です</small>
+    </p>
+
+    <div class="scan-frame">
+      <video id="barcode-video" autoplay muted playsinline></video>
+      <div class="scan-overlay">
+        <div class="scan-line"></div>
+      </div>
+    </div>
+
+    <!-- スキャン結果 -->
+    <div class="scan-result" id="scan-result">
+      <div class="scan-result-status" id="scan-result-status"></div>
+      <div id="scan-result-name" style="font-size:14px;margin:4px 0 8px;"></div>
+      <div class="scan-barcode-value" id="scan-barcode-value"></div>
+      <button class="btn-primary" id="scan-result-action" style="margin-top:12px;"></button>
+    </div>
+  </div>
+</div>
+
+<!-- ========================================
+     モーダル（共通）
+     ======================================== -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal-sheet">
+    <div class="modal-drag"></div>
+    <div class="modal-title" id="modal-title"></div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-actions" id="modal-actions"></div>
+  </div>
+</div>
+
+<!-- トースト通知 -->
+<div id="toast"></div>
+
+<script src="storage.js"></script>
+<script src="barcode.js"></script>
+<script src="app.js"></script>
+
+<script>
+  // 買い物リスト・スキャン画面のタブからも追加ボタンを動かす
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('btn-open-add-from-shopping')?.addEventListener('click', () => {
+      openAddForm();
+    });
+  });
+</script>
+
+</body>
+</html>
