@@ -301,6 +301,12 @@ function startScan() {
   resultEl.classList.remove('visible');
   lastScannedBarcode = null;
 
+  // HTTPSでない場合のみ警告を表示
+  const httpsWarning = document.getElementById('scan-https-warning');
+  if (httpsWarning) {
+    httpsWarning.style.display = (location.protocol !== 'https:' && location.hostname !== 'localhost') ? '' : 'none';
+  }
+
   let resultShown = false;
 
   barcodeScanner.start(

@@ -466,9 +466,8 @@
   </div>
 
   <div class="scan-container">
-    <p class="scan-hint">カメラをバーコードに向けてください<br>
-      <small style="color:var(--danger);font-size:11px;">※ HTTPS または localhost 環境が必要です</small>
-    </p>
+    <p class="scan-hint">塗料ボトルの側面・底のバーコードをカメラに向けてください</p>
+    <p id="scan-https-warning" class="scan-hint" style="color:var(--danger);font-size:12px;display:none;">※ HTTPSが必要です。このサイトではカメラが使用できません。</p>
 
     <div class="scan-frame">
       <video id="barcode-video" autoplay muted playsinline></video>
