@@ -690,6 +690,35 @@ html, body {
 }
 .scan-result-status.found { color: var(--success); }
 .scan-result-status.not-found { color: var(--warning); }
+.rakuten-result {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 8px 0;
+  padding: 10px;
+  background: var(--surface2);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.rakuten-thumb {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+.rakuten-parsed {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.rakuten-tag {
+  font-size: 12px;
+  background: var(--accent);
+  color: var(--accent-glow);
+  border-radius: 4px;
+  padding: 2px 8px;
+}
 .scan-hint {
   font-size: 13px;
   color: var(--muted);

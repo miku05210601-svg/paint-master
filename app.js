@@ -254,6 +254,47 @@ function renderShoppingList() {
 // ========================================
 // バーコードスキャン画面
 // ========================================
+async function fetchRakutenInfo(janCode) {
+  try {
+    const res = await fetch(`/api/rakuten?jan=${encodeURIComponent(janCode)}`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+function parsePaintInfo(itemName) {
+  // 商品名からメーカー・色番号・色名を推定する
+  const result = { maker: '', colorCode: '', colorName: itemName };
+
+  // Mr.カラー
+  const mrMatch = itemName.match(/Mr\.カラー|Mr\.Color/i);
+  if (mrMatch) result.maker = 'Mr.カラー';
+
+  // タミヤ
+  const tamiyaMatch = itemName.match(/タミヤ|TAMIYA/i);
+  if (tamiyaMatch) result.maker = 'タミヤカラー';
+
+  // ガイア
+  const gaiaMatch = itemName.match(/ガイア|GAIA/i);
+  if (gaiaMatch) result.maker = 'ガイアカラー';
+
+  // 水性ホビーカラー
+  const aqueousMatch = itemName.match(/水性ホビー/i);
+  if (aqueousMatch) result.maker = '水性ホビーカラー';
+
+  // 色番号（例: C-1, XF-2, H-3, GC-01 など）
+  const codeMatch = itemName.match(/\b([A-Z]{1,3}-?\d{1,3}[A-Z]?)\b/);
+  if (codeMatch) result.colorCode = codeMatch[1];
+
+  // 色名（「No.」や番号の後ろのテキストを抽出）
+  const nameMatch = itemName.match(/No\.\d+\s+(.+?)(?:\s*[\[（【]|$)/);
+  if (nameMatch) result.colorName = nameMatch[1].trim();
+
+  return result;
+}
+
 function startScan() {
   const videoEl = document.getElementById('barcode-video');
   const resultEl = document.getElementById('scan-result');
@@ -264,36 +305,76 @@ function startScan() {
 
   barcodeScanner.start(
     videoEl,
-    (value) => {
+    async (value) => {
       if (resultShown) return;
       resultShown = true;
       lastScannedBarcode = value;
-
-      const paint = paintStore.findByBarcode(value);
-      resultEl.classList.add('visible');
 
       const statusEl = document.getElementById('scan-result-status');
       const nameEl = document.getElementById('scan-result-name');
       const barcodeValEl = document.getElementById('scan-barcode-value');
       const actionEl = document.getElementById('scan-result-action');
+      const rakutenEl = document.getElementById('scan-rakuten-info');
 
+      resultEl.classList.add('visible');
       barcodeValEl.textContent = `バーコード: ${value}`;
+      rakutenEl.innerHTML = '';
+
+      const paint = paintStore.findByBarcode(value);
 
       if (paint) {
+        // 所持済み
         statusEl.textContent = '✓ 既に所持しています';
         statusEl.className = 'scan-result-status found';
         nameEl.textContent = `${paint.maker} ${paint.colorCode} ${paint.colorName}（在庫: ${paint.stock}）`;
         actionEl.textContent = '詳細を見る';
+        actionEl.style.display = '';
         actionEl.onclick = () => { barcodeScanner.stop(); openDetail(paint.id); };
       } else {
-        statusEl.textContent = '✗ 未登録です';
+        // 未登録 — 楽天APIで商品情報を検索
+        statusEl.textContent = '✗ 未登録です — 商品情報を検索中…';
         statusEl.className = 'scan-result-status not-found';
-        nameEl.textContent = 'この塗料は登録されていません';
-        actionEl.textContent = '新規登録する';
-        actionEl.onclick = () => { barcodeScanner.stop(); openAddForm({ barcode: value }); };
+        nameEl.textContent = '';
+        actionEl.style.display = 'none';
+
+        const rakutenData = await fetchRakutenInfo(value);
+
+        if (rakutenData && !rakutenData.error) {
+          const parsed = parsePaintInfo(rakutenData.itemName);
+          nameEl.textContent = rakutenData.itemName;
+
+          rakutenEl.innerHTML = `
+            <div class="rakuten-result">
+              ${rakutenData.imageUrl ? `<img src="${rakutenData.imageUrl}" alt="商品画像" class="rakuten-thumb">` : ''}
+              <div class="rakuten-parsed">
+                ${parsed.maker ? `<span class="rakuten-tag">メーカー: ${escapeHtml(parsed.maker)}</span>` : ''}
+                ${parsed.colorCode ? `<span class="rakuten-tag">色番号: ${escapeHtml(parsed.colorCode)}</span>` : ''}
+              </div>
+            </div>
+          `;
+
+          actionEl.textContent = 'この情報で登録する';
+          actionEl.style.display = '';
+          actionEl.onclick = () => {
+            barcodeScanner.stop();
+            openAddForm({
+              barcode: value,
+              maker: parsed.maker,
+              colorCode: parsed.colorCode,
+              colorName: parsed.colorName,
+            });
+          };
+        } else {
+          nameEl.textContent = '楽天での商品情報が見つかりませんでした';
+          actionEl.textContent = '手動で登録する';
+          actionEl.style.display = '';
+          actionEl.onclick = () => { barcodeScanner.stop(); openAddForm({ barcode: value }); };
+        }
+
+        statusEl.textContent = '✗ 未登録です';
       }
 
-      // 2秒後に再スキャン可能に
+      // 3秒後に再スキャン可能に
       setTimeout(() => { resultShown = false; }, 3000);
     },
     (errMsg) => {
@@ -304,6 +385,7 @@ function startScan() {
       document.getElementById('scan-barcode-value').textContent = '';
       document.getElementById('scan-result-action').textContent = '';
       document.getElementById('scan-result-action').onclick = null;
+      document.getElementById('scan-rakuten-info').innerHTML = '';
     }
   );
 }
