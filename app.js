@@ -367,11 +367,9 @@ function startScan() {
     const file = newInput.files[0];
     if (!file) return;
 
-    // プレビュー表示（画像の読み込み完了を待ってからデコード）
     const objectUrl = URL.createObjectURL(file);
-    loadingEl.style.display = 'block';
-    resultEl.classList.remove('visible');
 
+    // 画像読み込み
     await new Promise((resolve, reject) => {
       previewImg.onload = resolve;
       previewImg.onerror = reject;
@@ -379,19 +377,28 @@ function startScan() {
       previewImg.style.display = 'block';
     });
 
+    // 写真を撮った時点で即「手動登録」ボタンを表示
+    resultEl.classList.add('visible');
+    document.getElementById('scan-result-status').textContent = 'バーコードを読み取り中…';
+    document.getElementById('scan-result-status').className = 'scan-result-status';
+    document.getElementById('scan-result-name').textContent = '';
+    document.getElementById('scan-barcode-value').textContent = '';
+    document.getElementById('scan-rakuten-info').innerHTML = '';
+    const actionEl = document.getElementById('scan-result-action');
+    actionEl.textContent = '手動で登録する';
+    actionEl.style.display = '';
+    actionEl.onclick = () => openAddForm({});
+
+    // バーコード読み取りを試みる（失敗しても手動登録ボタンが残る）
     try {
-      const value = await barcodeScanner.decodeFromImage(previewImg);
-      loadingEl.style.display = 'none';
+      const value = await Promise.race([
+        barcodeScanner.decodeFromImage(previewImg),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000)),
+      ]);
       await handleBarcodeResult(value);
     } catch (err) {
-      loadingEl.style.display = 'none';
-      resultEl.classList.add('visible');
-      document.getElementById('scan-result-status').textContent = `エラー: ${err.message}`;
+      document.getElementById('scan-result-status').textContent = 'バーコードを読み取れませんでした。手動で登録してください。';
       document.getElementById('scan-result-status').className = 'scan-result-status not-found';
-      document.getElementById('scan-result-name').textContent = '';
-      document.getElementById('scan-barcode-value').textContent = '';
-      document.getElementById('scan-result-action').style.display = 'none';
-      document.getElementById('scan-rakuten-info').innerHTML = '';
     } finally {
       URL.revokeObjectURL(objectUrl);
       newInput.value = '';
