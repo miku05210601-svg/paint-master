@@ -379,17 +379,19 @@ function startScan() {
     const file = newInput.files[0];
     if (!file) return;
 
-    const objectUrl = URL.createObjectURL(file);
-
-    // 画像読み込み
-    await new Promise((resolve, reject) => {
-      previewImg.onload = resolve;
-      previewImg.onerror = reject;
-      previewImg.src = objectUrl;
-      previewImg.style.display = 'block';
+    // ファイルを FileReader で base64 化（URL.createObjectURL の iOS 問題を回避）
+    const imageBase64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = e => resolve(e.target.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
     });
 
-    // 写真を撮った時点で即「手動登録」ボタンを表示
+    // プレビュー表示
+    previewImg.src = imageBase64;
+    previewImg.style.display = 'block';
+
+    // 即座に結果エリアと「手動登録」ボタンを表示
     resultEl.classList.add('visible');
     document.getElementById('scan-result-status').textContent = 'ラベルを解析中…';
     document.getElementById('scan-result-status').className = 'scan-result-status';
@@ -403,17 +405,6 @@ function startScan() {
 
     // Claude Vision API で塗料ラベルを解析
     try {
-      // Canvas でリサイズして base64 化（API送信サイズを抑える）
-      const canvas = document.createElement('canvas');
-      const MAX = 1024;
-      const w = previewImg.naturalWidth || previewImg.width || 1024;
-      const h = previewImg.naturalHeight || previewImg.height || 768;
-      const scale = Math.min(1, MAX / Math.max(w, h));
-      canvas.width = Math.round(w * scale);
-      canvas.height = Math.round(h * scale);
-      canvas.getContext('2d').drawImage(previewImg, 0, 0, canvas.width, canvas.height);
-      const imageBase64 = canvas.toDataURL('image/jpeg', 0.85);
-
       const res = await Promise.race([
         fetch('/api/analyze-paint', {
           method: 'POST',
@@ -424,10 +415,8 @@ function startScan() {
       ]);
 
       const data = await res.json();
-
       if (!res.ok || data.error) throw new Error(data.error || '解析に失敗しました');
 
-      // 解析結果を表示して登録フォームへ引き継ぐ
       const { maker = '', colorCode = '', colorName = '', type = '' } = data;
       const displayName = [maker, colorCode, colorName].filter(Boolean).join(' ');
 
@@ -449,7 +438,6 @@ function startScan() {
       document.getElementById('scan-result-status').textContent = '解析できませんでした。手動で登録してください。';
       document.getElementById('scan-result-status').className = 'scan-result-status not-found';
     } finally {
-      URL.revokeObjectURL(objectUrl);
       newInput.value = '';
     }
   });
