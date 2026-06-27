@@ -383,10 +383,10 @@ function startScan() {
       const value = await barcodeScanner.decodeFromImage(previewImg);
       loadingEl.style.display = 'none';
       await handleBarcodeResult(value);
-    } catch {
+    } catch (err) {
       loadingEl.style.display = 'none';
       resultEl.classList.add('visible');
-      document.getElementById('scan-result-status').textContent = '読み取れませんでした。バーコード部分が明るくはっきり写るように撮り直してください。';
+      document.getElementById('scan-result-status').textContent = `エラー: ${err.message}`;
       document.getElementById('scan-result-status').className = 'scan-result-status not-found';
       document.getElementById('scan-result-name').textContent = '';
       document.getElementById('scan-barcode-value').textContent = '';
